@@ -1,0 +1,11 @@
+# Submit server .submit file for
+#  Course CMSC216
+#  Project E4: Shell Jr.
+
+courseName=CMSC216
+semester=202308
+projectNumber=E4
+courseKey=ccb67d6498752d1b
+authentication.type=cas
+baseURL=https://submit.cs.umd.edu:443/fall2023
+submitURL=https://submit.cs.umd.edu:443/fall2023/eclipse/SubmitProjectViaEclipse

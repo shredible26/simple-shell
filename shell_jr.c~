@@ -1,0 +1,207 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+
+#define MAX_DIR_STACK_SIZE 16
+#define MAX_COMMAND_LENGTH 1024
+
+char *dirStack[MAX_DIR_STACK_SIZE];
+int dirStackTop = -1;
+
+void handle_dirs();
+void executeCommand(char *command);
+void changeDirectory(const char *path);
+void pushDirectory(const char *path);
+void popDirectory();
+int  executeExternalCommand(char *command, char *argument);
+void printDirectoryStack();
+
+
+int main() {
+  char commandLine[MAX_COMMAND_LENGTH];
+  char command[MAX_COMMAND_LENGTH], argument[MAX_COMMAND_LENGTH];
+  int numArgs, execStatus = 0;
+
+  while (1) {
+    printf("shell_jr: ");
+    fflush(stdout);
+
+    if (!fgets(commandLine, MAX_COMMAND_LENGTH, stdin)) {
+      if (!feof(stdin)) {
+	printf("\n");
+      }
+      break;
+    }
+
+    commandLine[strcspn(commandLine, "\n")] = 0;
+
+    if (commandLine[0] == '\0') {
+      continue;
+    }
+
+    numArgs = sscanf(commandLine, "%s %s", command, argument);
+
+    if (strcmp(command, "exit") == 0 || strcmp(command, "goodbye") == 0) {
+      printf("See you\n");
+      break;
+    } else if (strcmp(command, "cd") == 0) {
+      if (numArgs > 1) {
+	changeDirectory(argument);
+      } else {
+	printf("cd command requires a directory argument\n");
+      }
+    } else if (strcmp(command, "pushd") == 0) {
+      if (numArgs > 1) {
+	pushDirectory(argument);
+      } else {
+	printf("pushd command requires a directory argument\n");
+      }
+    } else if (strcmp(command, "dirs") == 0) {
+      printDirectoryStack();
+    } else if (strcmp(command, "popd") == 0) {
+      popDirectory();
+    } else if (numArgs > 0) {
+      execStatus = executeExternalCommand(command, numArgs > 1 ? argument : NULL);
+      if (execStatus != 0) {
+	continue; // Skip the extra prompt if command execution failed
+      }
+    } else {
+      printf("Failed to execute %s\n", command);
+    }
+  }
+
+  return 0;
+}
+
+void handle_dirs() {
+  for (int i = 0; i <= directory_stack_top; i++) {
+    puts(directory_stack[i]);
+  }
+}
+
+void executeCommand(char *command) {
+  pid_t pid;
+  int status;
+  char *argv[3];
+
+  char *token = strtok(command, " ");
+  argv[0] = token;
+  token = strtok(NULL, " ");
+  argv[1] = token;
+  argv[2] = NULL;
+
+  pid = fork();
+
+  if (pid == -1) {
+    perror("fork");
+    exit(EXIT_FAILURE);
+  } else if (pid == 0) {
+    if (execvp(argv[0], argv) == -1) {
+      perror("execvp");
+      exit(EXIT_FAILURE);
+    }
+  } else {
+    if (waitpid(pid, &status, 0) == -1) {
+      perror("waitpid");
+      exit(EXIT_FAILURE);
+    }
+  }
+}
+
+void changeDirectory(const char *path) {
+  if (chdir(path) != 0) {
+    perror("Cannot change to directory");
+  }
+}
+
+void pushDirectory(const char *path) {
+  char *newDir;
+  char currentDir[1024];
+
+  if (dirStackTop >= MAX_DIR_STACK_SIZE - 1) {
+    printf("Directory stack is full\n");
+    return;
+  }
+
+  if (getcwd(currentDir, sizeof(currentDir)) == NULL) {
+    perror("getcwd");
+    return;
+  }
+
+  if (chdir(path) != 0) {
+    perror("chdir");
+    return;
+  }
+
+  newDir = (char *)malloc(strlen(currentDir) + 1);
+  if (newDir == NULL) {
+    perror("malloc");
+    return;
+  }
+  strcpy(newDir, currentDir);
+  dirStack[++dirStackTop] = newDir;
+}
+
+void popDirectory() m{
+  char *topDir;
+
+  if (dirStackTop < 0) {
+    printf("Directory stack is empty\n");
+    return;
+  }
+
+  topDir = dirStack[dirStackTop];
+  dirStackTop--;
+
+  if (chdir(topDir) != 0) {
+    perror("chdir");
+  } else {
+    printf("Changed to directory: %s\n", topDir);
+  }
+
+  free(topDir);
+}
+
+int executeExternalCommand(char *command, char *argument) {
+  pid_t pid;
+  int status;
+
+  char *argv[3];
+  argv[0] = command;
+  argv[1] = argument;
+  argv[2] = NULL;
+
+  pid = fork();
+
+  if (pid == -1) {
+    perror("fork");
+    exit(EXIT_FAILURE);
+  } else if (pid == 0) {
+    if (execvp(argv[0], argv) == -1) {
+      fprintf(stdout, "Failed to execute %s\n", command);
+      _exit(EXIT_FAILURE);
+    }
+  } else {
+    waitpid(pid, &status, 0);
+    if (WIFEXITED(status) && WEXITSTATUS(status) != 0) {
+      return 2; // Command execution failed
+    }
+  }
+  return 0; // Command executed successfully
+}
+
+
+void printDirectoryStack() {
+  int i;
+
+  if (dirStackTop < 0) {
+    printf("Directory stack is empty\n");
+  } else {
+    for (i = dirStackTop; i >= 0; i--) {
+      printf("%s\n", dirStack[i]);
+    }
+  }
+}
